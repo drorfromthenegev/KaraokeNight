@@ -23,6 +23,11 @@ interface PartyState {
   removeSong: (songId: string) => void;
   reorderQueue: (fromIndex: number, toIndex: number) => void;
   getUserQueuePosition: (submittedBy: string) => number;
+  playSong: () => void;
+  pauseSong: () => void;
+  rewindSong: () => void;
+  skipSong: () => void;
+  updateQueueFromPostgres: () => void;
 }
 
 export const usePartyStore = create<PartyState>((set, get) => ({
@@ -47,5 +52,57 @@ export const usePartyStore = create<PartyState>((set, get) => ({
   getUserQueuePosition: (submittedBy) => {
     const state = get();
     return state.queue.findIndex(song => song.submitted_by === submittedBy);
+  },
+  playSong: async () => {
+    const state = get();
+    await supabase
+      .channel(`party:${state.partyId}`)
+      .send({
+        type: 'broadcast',
+        event: 'play',
+      });
+  },
+  pauseSong: async () => {
+    const state = get();
+    await supabase
+      .channel(`party:${state.partyId}`)
+      .send({
+        type: 'broadcast',
+        event: 'pause',
+      });
+  },
+  rewindSong: async () => {
+    const state = get();
+    await supabase
+      .channel(`party:${state.partyId}`)
+      .send({
+        type: 'broadcast',
+        event: 'rewind',
+      });
+  },
+  skipSong: async () => {
+    const state = get();
+    await supabase
+      .channel(`party:${state.partyId}`)
+      .send({
+        type: 'broadcast',
+        event: 'skip',
+      });
+    const nextSong = state.queue[1];
+    if (nextSong) {
+      set({ currentSong: nextSong });
+    }
+  },
+  updateQueueFromPostgres: async () => {
+    const state = get();
+    const { data: updatedQueue } = await supabase
+      .from('songs')
+      .select('*')
+      .eq('party_id', state.partyId)
+      .order('order', { ascending: true });
+
+    if (updatedQueue) {
+      set({ queue: updatedQueue });
+    }
   }
 }));

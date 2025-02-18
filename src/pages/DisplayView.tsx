@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import YouTube from 'react-youtube';
 import { usePartyStore } from '../store/partyStore';
@@ -6,20 +6,34 @@ import { supabase } from '../lib/supabase';
 
 export function DisplayView() {
   const { partyId } = useParams();
-  const { currentSong, passcode } = usePartyStore();
+  const { currentSong, passcode, setCurrentSong } = usePartyStore();
+  const playerRef = useRef(null);
 
   useEffect(() => {
     const subscription = supabase
       .channel(`party:${partyId}`)
-      .on('*', (payload) => {
-        console.log('Real-time update:', payload);
+      .on('broadcast', { event: 'play' }, () => {
+        playerRef.current?.playVideo();
+      })
+      .on('broadcast', { event: 'pause' }, () => {
+        playerRef.current?.pauseVideo();
+      })
+      .on('broadcast', { event: 'rewind' }, () => {
+        playerRef.current?.seekTo(0);
+      })
+      .on('broadcast', { event: 'skip' }, () => {
+        playerRef.current?.stopVideo();
+        setCurrentSong(null);
+      })
+      .on('broadcast', { event: 'setCurrentSong' }, (payload) => {
+        setCurrentSong(payload.song);
       })
       .subscribe();
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [partyId]);
+  }, [partyId, setCurrentSong]);
 
   return (
     <div className="min-h-screen bg-black">
@@ -53,6 +67,9 @@ export function DisplayView() {
                 controls: 0,
                 modestbranding: 1,
               },
+            }}
+            onReady={(event) => {
+              playerRef.current = event.target;
             }}
           />
         ) : (

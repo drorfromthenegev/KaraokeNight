@@ -1,12 +1,12 @@
 import React, { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Trash2, GripVertical, Play } from 'lucide-react';
+import { Trash2, GripVertical, Play, Pause, Rewind, SkipForward } from 'lucide-react';
 import { usePartyStore } from '../store/partyStore';
 import { supabase } from '../lib/supabase';
 
 export function MCView() {
   const { partyId } = useParams();
-  const { queue, passcode, removeSong, reorderQueue } = usePartyStore();
+  const { queue, passcode, removeSong, reorderQueue, setCurrentSong } = usePartyStore();
 
   useEffect(() => {
     const subscription = supabase
@@ -14,6 +14,79 @@ export function MCView() {
       .on('*', (payload) => {
         console.log('Real-time update:', payload);
       })
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [partyId]);
+
+  const playSong = async (songId) => {
+    await supabase
+      .channel(`party:${partyId}`)
+      .send({
+        type: 'broadcast',
+        event: 'play',
+        payload: { songId },
+      });
+    setCurrentSong(queue.find((song) => song.id === songId));
+  };
+
+  const pauseSong = async () => {
+    await supabase
+      .channel(`party:${partyId}`)
+      .send({
+        type: 'broadcast',
+        event: 'pause',
+      });
+  };
+
+  const rewindSong = async () => {
+    await supabase
+      .channel(`party:${partyId}`)
+      .send({
+        type: 'broadcast',
+        event: 'rewind',
+      });
+  };
+
+  const skipSong = async () => {
+    await supabase
+      .channel(`party:${partyId}`)
+      .send({
+        type: 'broadcast',
+        event: 'skip',
+      });
+    const nextSong = queue[1];
+    if (nextSong) {
+      setCurrentSong(nextSong);
+    }
+  };
+
+  const handleQueueUpdate = async () => {
+    const { data: updatedQueue } = await supabase
+      .from('songs')
+      .select('*')
+      .eq('party_id', partyId)
+      .order('order', { ascending: true });
+
+    if (updatedQueue) {
+      setQueue(updatedQueue);
+    }
+  };
+
+  useEffect(() => {
+    const subscription = supabase
+      .channel(`party:${partyId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'songs'
+        },
+        handleQueueUpdate
+      )
       .subscribe();
 
     return () => {
@@ -61,10 +134,34 @@ export function MCView() {
           </div>
         </div>
 
-        <div className="mt-8 flex justify-center">
-          <button className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors">
+        <div className="mt-8 flex justify-center space-x-4">
+          <button
+            onClick={() => playSong(queue[0]?.id)}
+            className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+          >
             <Play className="w-5 h-5" />
-            <span>Play Next Song</span>
+            <span>Play</span>
+          </button>
+          <button
+            onClick={pauseSong}
+            className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+          >
+            <Pause className="w-5 h-5" />
+            <span>Pause</span>
+          </button>
+          <button
+            onClick={rewindSong}
+            className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+          >
+            <Rewind className="w-5 h-5" />
+            <span>Rewind</span>
+          </button>
+          <button
+            onClick={skipSong}
+            className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+          >
+            <SkipForward className="w-5 h-5" />
+            <span>Skip</span>
           </button>
         </div>
       </main>
