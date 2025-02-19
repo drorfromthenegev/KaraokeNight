@@ -1,39 +1,86 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import YouTube from 'react-youtube';
+import YouTube, { YouTubeProps } from 'react-youtube';
 import { usePartyStore } from '../store/partyStore';
 import { supabase } from '../lib/supabase';
 
-export function DisplayView() {
-  const { partyId } = useParams();
-  const { currentSong, passcode, setCurrentSong } = usePartyStore();
-  const playerRef = useRef(null);
+interface YouTubeEvent {
+  target: any;
+}	
 
+export function DisplayView() {
+  const { partyId } = useParams<{ partyId: string }>();
+  const playerRef = useRef<any>(null);
+  const { queue, passcode, setQueue, removeSong } = usePartyStore();
+
+
+
+  // Subscribe to DB changes and attach broadcast listeners
   useEffect(() => {
-    const subscription = supabase
-      .channel(`party:${partyId}`)
-      .on('broadcast', { event: 'play' }, () => {
-        playerRef.current?.playVideo();
-      })
+
+    const subscription = supabase.channel(`party:${partyId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'songs'
+        },
+        async () => {
+          const { data: updatedQueue } = await supabase
+            .from('songs')
+            .select('*')
+            .eq('party_id', partyId)
+            .order('created_at', { ascending: true });
+          if (updatedQueue) {
+            setQueue(updatedQueue);
+          }
+        }
+      )
       .on('broadcast', { event: 'pause' }, () => {
         playerRef.current?.pauseVideo();
+      })
+      .on('broadcast', { event: 'play' }, () => {
+        playerRef.current?.playVideo();
       })
       .on('broadcast', { event: 'rewind' }, () => {
         playerRef.current?.seekTo(0);
       })
       .on('broadcast', { event: 'skip' }, () => {
         playerRef.current?.stopVideo();
-        setCurrentSong(null);
-      })
-      .on('broadcast', { event: 'setCurrentSong' }, (payload) => {
-        setCurrentSong(payload.song);
       })
       .subscribe();
+
+    // Initial queue fetch
+    const fetchQueue = async () => {
+      const { data: initialQueue } = await supabase
+        .from('songs')
+        .select('*')
+        .eq('party_id', partyId)
+        .order('created_at', { ascending: true });
+      if (initialQueue) {
+        setQueue(initialQueue);
+      }
+    };
+    fetchQueue();
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [partyId, setCurrentSong]);
+  }, [partyId, setQueue]);
+
+  const handleVideoEnd = async () => {
+    if (queue[0]) {
+      // Remove the song from the database
+      await supabase
+        .from('songs')
+        .delete()
+        .eq('id', queue[0].id);
+      
+      // Remove from local state
+      removeSong(queue[0].id);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-black">
@@ -41,10 +88,10 @@ export function DisplayView() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center text-white">
             <div>
-              {currentSong && (
+              {queue[0] && (
                 <div>
-                  <h2 className="text-xl font-bold">{currentSong.title}</h2>
-                  <p className="text-sm opacity-75">Performed by {currentSong.submittedBy}</p>
+                  <h2 className="text-xl font-bold">{queue[0].title}</h2>
+                  <p className="text-sm opacity-75">Performed by {queue[0].submitted_by}</p>
                 </div>
               )}
             </div>
@@ -56,21 +103,22 @@ export function DisplayView() {
       </div>
 
       <div className="h-screen flex items-center justify-center">
-        {currentSong ? (
+        {queue[0] ? (
           <YouTube
-            videoId={currentSong.youtubeUrl}
+            videoId={queue[0].youtube_url}
             opts={{
               height: '720',
               width: '1280',
               playerVars: {
-                autoplay: 1,
+                autoplay: 0,
                 controls: 0,
                 modestbranding: 1,
               },
             }}
-            onReady={(event) => {
+            onReady={(event: YouTubeEvent) => {
               playerRef.current = event.target;
             }}
+            onEnd={handleVideoEnd}  // Add onEnd handler
           />
         ) : (
           <div className="text-white text-center">

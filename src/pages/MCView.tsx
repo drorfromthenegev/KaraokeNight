@@ -1,83 +1,17 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Trash2, GripVertical, Play, Pause, Rewind, SkipForward } from 'lucide-react';
 import { usePartyStore } from '../store/partyStore';
 import { supabase } from '../lib/supabase';
 
 export function MCView() {
-  const { partyId } = useParams();
-  const { queue, passcode, removeSong, reorderQueue, setCurrentSong } = usePartyStore();
+  const { partyId } = useParams<{ partyId: string }>();
+  const { queue, passcode, removeSong, setQueue, reorderQueue } = usePartyStore();
 
+
+  // Subscribe and attach postgres_changes listener once
   useEffect(() => {
-    const subscription = supabase
-      .channel(`party:${partyId}`)
-      .on('*', (payload) => {
-        console.log('Real-time update:', payload);
-      })
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [partyId]);
-
-  const playSong = async (songId) => {
-    await supabase
-      .channel(`party:${partyId}`)
-      .send({
-        type: 'broadcast',
-        event: 'play',
-        payload: { songId },
-      });
-    setCurrentSong(queue.find((song) => song.id === songId));
-  };
-
-  const pauseSong = async () => {
-    await supabase
-      .channel(`party:${partyId}`)
-      .send({
-        type: 'broadcast',
-        event: 'pause',
-      });
-  };
-
-  const rewindSong = async () => {
-    await supabase
-      .channel(`party:${partyId}`)
-      .send({
-        type: 'broadcast',
-        event: 'rewind',
-      });
-  };
-
-  const skipSong = async () => {
-    await supabase
-      .channel(`party:${partyId}`)
-      .send({
-        type: 'broadcast',
-        event: 'skip',
-      });
-    const nextSong = queue[1];
-    if (nextSong) {
-      setCurrentSong(nextSong);
-    }
-  };
-
-  const handleQueueUpdate = async () => {
-    const { data: updatedQueue } = await supabase
-      .from('songs')
-      .select('*')
-      .eq('party_id', partyId)
-      .order('order', { ascending: true });
-
-    if (updatedQueue) {
-      setQueue(updatedQueue);
-    }
-  };
-
-  useEffect(() => {
-    const subscription = supabase
-      .channel(`party:${partyId}`)
+    const subscription = supabase.channel(`party:${partyId}`)
       .on(
         'postgres_changes',
         {
@@ -85,14 +19,63 @@ export function MCView() {
           schema: 'public',
           table: 'songs'
         },
-        handleQueueUpdate
+        async () => {
+          const { data: updatedQueue } = await supabase
+            .from('songs')
+            .select('*')
+            .eq('party_id', partyId)
+            .order('created_at', { ascending: true });
+          if (updatedQueue) {
+            setQueue(updatedQueue);
+          }
+        }
       )
       .subscribe();
-
     return () => {
       subscription.unsubscribe();
     };
-  }, [partyId]);
+  }, [partyId, setQueue]);
+
+  const playSong = async (songId?: string) => {
+    if (!songId) return;
+    const song = queue.find((song) => song.id === songId);
+    if (!song) return;
+    await supabase.channel(`party:${partyId}`).send({
+      type: 'broadcast',
+      event: 'play',
+      payload: { song }
+    });
+  };
+
+  const pauseSong = async () => {
+    await supabase.channel(`party:${partyId}`).send({
+      type: 'broadcast',
+      event: 'pause',
+      payload: {}
+    });
+  };
+
+  const rewindSong = async () => {
+    await supabase.channel(`party:${partyId}`).send({
+      type: 'broadcast',
+      event: 'rewind',
+      payload: {}
+    });
+  };
+
+  const skipSong = async () => {
+    // Remove current song from DB
+    await supabase
+      .from('songs')
+      .delete()
+      .eq('id', queue[0].id);
+    await supabase.channel(`party:${partyId}`).send({
+      type: 'broadcast',
+      event: 'skip',
+      payload: {}
+    });
+
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -120,7 +103,7 @@ export function MCView() {
                   <GripVertical className="text-gray-400 cursor-move" />
                   <div className="flex-1">
                     <h3 className="font-medium text-gray-900">{song.title}</h3>
-                    <p className="text-sm text-gray-500">Added by {song.submittedBy}</p>
+                    <p className="text-sm text-gray-500">Added by {song.submitted_by}</p>
                   </div>
                   <button
                     onClick={() => removeSong(song.id)}
