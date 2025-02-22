@@ -1,25 +1,81 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { Trash2, GripVertical, Play } from 'lucide-react';
+import { Trash2, GripVertical, Play, Pause, Rewind, SkipForward } from 'lucide-react';
 import { usePartyStore } from '../store/partyStore';
 import { supabase } from '../lib/supabase';
 
 export function MCView() {
-  const { partyId } = useParams();
-  const { queue, passcode, removeSong, reorderQueue } = usePartyStore();
+  const { partyId } = useParams<{ partyId: string }>();
+  const { queue, passcode, removeSong, setQueue, reorderQueue } = usePartyStore();
 
+
+  // Subscribe and attach postgres_changes listener once
   useEffect(() => {
-    const subscription = supabase
-      .channel(`party:${partyId}`)
-      .on('*', (payload) => {
-        console.log('Real-time update:', payload);
-      })
+    const subscription = supabase.channel(`party:${partyId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'songs'
+        },
+        async () => {
+          const { data: updatedQueue } = await supabase
+            .from('songs')
+            .select('*')
+            .eq('party_id', partyId)
+            .order('created_at', { ascending: true });
+          if (updatedQueue) {
+            setQueue(updatedQueue);
+          }
+        }
+      )
       .subscribe();
-
     return () => {
       subscription.unsubscribe();
     };
-  }, [partyId]);
+  }, [partyId, setQueue]);
+
+  const playSong = async (songId?: string) => {
+    if (!songId) return;
+    const song = queue.find((song) => song.id === songId);
+    if (!song) return;
+    await supabase.channel(`party:${partyId}`).send({
+      type: 'broadcast',
+      event: 'play',
+      payload: { song }
+    });
+  };
+
+  const pauseSong = async () => {
+    await supabase.channel(`party:${partyId}`).send({
+      type: 'broadcast',
+      event: 'pause',
+      payload: {}
+    });
+  };
+
+  const rewindSong = async () => {
+    await supabase.channel(`party:${partyId}`).send({
+      type: 'broadcast',
+      event: 'rewind',
+      payload: {}
+    });
+  };
+
+  const skipSong = async () => {
+    // Remove current song from DB
+    await supabase
+      .from('songs')
+      .delete()
+      .eq('id', queue[0].id);
+    await supabase.channel(`party:${partyId}`).send({
+      type: 'broadcast',
+      event: 'skip',
+      payload: {}
+    });
+
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -47,7 +103,7 @@ export function MCView() {
                   <GripVertical className="text-gray-400 cursor-move" />
                   <div className="flex-1">
                     <h3 className="font-medium text-gray-900">{song.title}</h3>
-                    <p className="text-sm text-gray-500">Added by {song.submittedBy}</p>
+                    <p className="text-sm text-gray-500">Added by {song.submitted_by}</p>
                   </div>
                   <button
                     onClick={() => removeSong(song.id)}
@@ -61,10 +117,34 @@ export function MCView() {
           </div>
         </div>
 
-        <div className="mt-8 flex justify-center">
-          <button className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors">
+        <div className="mt-8 flex justify-center space-x-4">
+          <button
+            onClick={() => playSong(queue[0]?.id)}
+            className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+          >
             <Play className="w-5 h-5" />
-            <span>Play Next Song</span>
+            <span>Play</span>
+          </button>
+          <button
+            onClick={pauseSong}
+            className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+          >
+            <Pause className="w-5 h-5" />
+            <span>Pause</span>
+          </button>
+          <button
+            onClick={rewindSong}
+            className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+          >
+            <Rewind className="w-5 h-5" />
+            <span>Rewind</span>
+          </button>
+          <button
+            onClick={skipSong}
+            className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+          >
+            <SkipForward className="w-5 h-5" />
+            <span>Skip</span>
           </button>
         </div>
       </main>
