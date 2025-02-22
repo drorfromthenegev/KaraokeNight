@@ -25,6 +25,37 @@ export function PartyView() {
     getUserQueuePosition 
   } = usePartyStore();
 
+  // Restore persisted values on mount
+  useEffect(() => {
+    const storedPartyId = localStorage.getItem('partyId');
+    const storedSubmittedSongId = localStorage.getItem('submittedSongId');
+    if (storedPartyId && !partyId) {
+      setPartyId(storedPartyId);
+      setJoined(true);
+    }
+    if (storedSubmittedSongId) {
+      setSubmittedSongId(storedSubmittedSongId);
+    }
+  }, []); // Run once
+
+  // Check if party exists; if not, clear persisted data and return to join view
+  useEffect(() => {
+    if (!partyId) return;
+    const checkParty = async () => {
+      const { data, error } = await supabase
+        .from('parties')
+        .select('id')
+        .eq('id', partyId)
+        .single();
+      if (error || !data) {
+        localStorage.removeItem('partyId');
+        localStorage.removeItem('submittedSongId');
+        setPartyId('');
+        setJoined(false);
+      }
+    };
+    checkParty();
+  }, [partyId, setPartyId]);
 
   // Subscribe and attach both postgres_changes and broadcast 'play' listeners
   useEffect(() => {
@@ -78,7 +109,6 @@ export function PartyView() {
   }, [queue, name, getUserQueuePosition]);
 
   const joinParty = async () => {
-    // ...existing joinParty code...
     try {
       const { data, error } = await supabase
         .from('parties')
@@ -91,6 +121,7 @@ export function PartyView() {
       if (data) {
         setPartyId(data.id);
         setPasscode(data.passcode);
+        localStorage.setItem('partyId', data.id);
         setJoined(true);
         setError('');
         if ('Notification' in window) {
@@ -105,14 +136,12 @@ export function PartyView() {
   };
 
   const extractVideoId = (url: string) => {
-    // ...existing extractVideoId code...
     const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
     const match = url.match(regex);
     return match ? match[1] : null;
   };
 
   const getVideoTitle = async (videoId: string) => {
-    // ...existing getVideoTitle code...
     try {
       const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
       const data = await response.json();
@@ -153,6 +182,7 @@ export function PartyView() {
       if (data) {
         addSong(data);
         setSubmittedSongId(data.id);
+        localStorage.setItem('submittedSongId', data.id);
         setYoutubeUrl('');
         setError('');
         setSuccess('Song added successfully! Get ready to shine! ✨');
@@ -160,6 +190,23 @@ export function PartyView() {
       }
     } catch (error) {
       setError('Error submitting song. Please try again.');
+    }
+  };
+
+  // New cancelSong function
+  const cancelSong = async () => {
+    try {
+      if (!submittedSongId) return;
+      await supabase
+        .from('songs')
+        .delete()
+        .eq('id', submittedSongId);
+      // Optionally remove song from queue here if required
+      setSubmittedSongId(null);
+      localStorage.removeItem('submittedSongId');
+      setShowSubmission(true);
+    } catch (error) {
+      setError('Error cancelling song. Please try again.');
     }
   };
 
@@ -216,17 +263,23 @@ export function PartyView() {
             ? "Time to warm up those vocal cords! 🎵" 
             : "Take your time to practice! 🎼"}
         </p>
+        {submittedSongId && (
+          <button
+            onClick={cancelSong}
+            className="mt-4 py-2 px-4 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+          >
+            Cancel Song
+          </button>
+        )}
       </div>
     );
   };
 
   return (
-    // ...existing JSX...
     <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-500 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-2xl p-8">
         {!joined ? (
           <div className="space-y-6">
-            {/* ...join party UI... */}
             <div className="text-center">
               <div className="mx-auto w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center">
                 <Music className="w-8 h-8 text-purple-600" />
