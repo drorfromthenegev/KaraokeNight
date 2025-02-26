@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Trash2, GripVertical, Play, Pause, Rewind, SkipForward } from 'lucide-react';
 import { usePartyStore } from '../store/partyStore';
 import { supabase } from '../lib/supabase';
 
 export function MCView() {
   const { partyId } = useParams<{ partyId: string }>();
+  const navigate = useNavigate();
   const { queue, passcode, removeSong, setQueue, reorderQueue } = usePartyStore();
 
 
@@ -77,14 +78,37 @@ export function MCView() {
 
   };
 
+  const endParty = async () => {
+    // Delete all songs associated with the party
+    await supabase
+      .from('songs')
+      .delete()
+      .eq('party_id', partyId);
+    // Delete the party itself
+    await supabase
+      .from('party')
+      .delete()
+      .eq('id', partyId);
+    // Redirect to the main page
+    navigate("/");
+  };
+
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex justify-between items-center">
             <h1 className="text-3xl font-bold text-gray-900">Party Control</h1>
-            <div className="bg-purple-100 px-4 py-2 rounded-lg">
-              <span className="text-purple-800 font-medium">Passcode: {passcode}</span>
+            <div className="flex items-center space-x-4">
+              <div className="bg-purple-100 px-4 py-2 rounded-lg">
+                <span className="text-purple-800 font-medium">Passcode: {passcode}</span>
+              </div>
+              <button
+                onClick={endParty}
+                className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors"
+              >
+                <span>End Party</span>
+              </button>
             </div>
           </div>
         </div>
