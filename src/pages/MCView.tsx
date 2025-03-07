@@ -141,31 +141,31 @@ export function MCView() {
           </div>
         </div>
 
-        <div className="mt-8 flex justify-center space-x-4">
+        <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4 max-w-md md:max-w-none mx-auto">
           <button
             onClick={() => playSong(queue[0]?.id)}
-            className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+            className="flex items-center justify-center space-x-2 bg-purple-600 text-white px-4 md:px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
           >
             <Play className="w-5 h-5" />
             <span>Play</span>
           </button>
           <button
             onClick={pauseSong}
-            className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+            className="flex items-center justify-center space-x-2 bg-purple-600 text-white px-4 md:px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
           >
             <Pause className="w-5 h-5" />
             <span>Pause</span>
           </button>
           <button
             onClick={rewindSong}
-            className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+            className="flex items-center justify-center space-x-2 bg-purple-600 text-white px-4 md:px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
           >
             <Rewind className="w-5 h-5" />
             <span>Rewind</span>
           </button>
           <button
             onClick={skipSong}
-            className="flex items-center space-x-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+            className="flex items-center justify-center space-x-2 bg-purple-600 text-white px-4 md:px-8 py-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
           >
             <SkipForward className="w-5 h-5" />
             <span>Skip</span>
