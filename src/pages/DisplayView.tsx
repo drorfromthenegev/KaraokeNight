@@ -13,8 +13,6 @@ export function DisplayView() {
   const playerRef = useRef<any>(null);
   const { queue, passcode, setQueue, removeSong } = usePartyStore();
 
-
-
   // Subscribe to DB changes and attach broadcast listeners
   useEffect(() => {
 
@@ -83,47 +81,71 @@ export function DisplayView() {
   };
 
   return (
-    <div className="min-h-screen bg-black">
-      <div className="fixed top-0 left-0 right-0 bg-gradient-to-b from-black to-transparent z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex justify-between items-center text-white">
-            <div>
-              {queue[0] && (
-                <div>
-                  <h2 className="text-xl font-bold">{queue[0].title}</h2>
-                  <p className="text-sm opacity-75">Performed by {queue[0].submitted_by}</p>
-                </div>
-              )}
-            </div>
-            <div className="bg-white/10 px-4 py-2 rounded-lg backdrop-blur-sm">
-              <span className="font-medium">Passcode: {passcode}</span>
-            </div>
+    <div className="min-h-screen h-screen flex flex-col bg-black">
+      {/* Redesigned compact header with 3 columns */}
+      <header className="bg-black py-4 px-6 border-b border-gray-800">
+        <div className="flex justify-between items-center">
+          {/* Left: Website URL */}
+          <div className="text-white text-2xl font-bold w-1/4">
+            {window.location.origin}
+          </div>
+          
+          {/* Center: Song info */}
+          <div className="text-white text-center flex-1">
+            {queue[0] ? (
+              <div>
+                <h2 className="text-2xl font-semibold">{queue[0].title}</h2>
+                <p className="text-lg opacity-75">Performed by {queue[0].submitted_by}</p>
+              </div>
+            ) : (
+              <div className="text-xl">
+                Waiting for songs...
+              </div>
+            )}
+          </div>
+          
+          {/* Right: Passcode */}
+          <div className="text-white text-2xl font-bold w-1/4 text-right">
+            Party Code: <span className="text-purple-400">{passcode}</span>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="h-screen flex items-center justify-center">
+      {/* Fixed video container to take all available space */}
+      <div className="flex-grow relative w-full">
         {queue[0] ? (
-          <YouTube
-            videoId={queue[0].youtube_url}
-            opts={{
-              height: '720',
-              width: '1280',
-              playerVars: {
-                autoplay: 0,
-                controls: 0,
-                modestbranding: 1,
-              },
-            }}
-            onReady={(event: YouTubeEvent) => {
-              playerRef.current = event.target;
-            }}
-            onEnd={handleVideoEnd}  // Add onEnd handler
-          />
+          <div className="absolute inset-0">
+            <YouTube
+              videoId={queue[0].youtube_url}
+              opts={{
+                playerVars: {
+                  autoplay: 0,
+                  controls: 0,
+                  modestbranding: 1,
+                },
+              }}
+              className="w-full h-full"
+              containerClassName="w-full h-full"
+              iframeClassName="w-full h-full"
+              onReady={(event: YouTubeEvent) => {
+                playerRef.current = event.target;
+                
+                // Apply styles directly to the iframe for full size
+                const iframe = event.target.getIframe();
+                if (iframe) {
+                  iframe.style.width = '100%';
+                  iframe.style.height = '100%';
+                }
+              }}
+              onEnd={handleVideoEnd}
+            />
+          </div>
         ) : (
-          <div className="text-white text-center">
-            <h2 className="text-2xl font-bold mb-2">Waiting for songs...</h2>
-            <p className="opacity-75">Add songs using the party code: {passcode}</p>
+          <div className="text-white text-center p-8 h-full flex items-center justify-center">
+            <div>
+              <h2 className="text-4xl font-bold mb-4">Waiting for songs...</h2>
+              <p className="text-2xl opacity-75">Add songs using the party code: {passcode}</p>
+            </div>
           </div>
         )}
       </div>
