@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, AlertCircle, CheckCircle2, Mic2 } from 'lucide-react';
+import { Music, AlertCircle, CheckCircle2, Mic2, LogOut } from 'lucide-react';
 import { usePartyStore } from '../store/partyStore';
 import { supabase } from '../lib/supabase';
 
@@ -24,6 +24,9 @@ export function PartyView() {
     setQueue,
     getUserQueuePosition 
   } = usePartyStore();
+
+  // Add ref to store previous queue position
+  const prevPositionRef = useRef<number>(-1);
 
   // Restore persisted values on mount
   useEffect(() => {
@@ -95,7 +98,9 @@ export function PartyView() {
         setShowSubmission(true);
       } else {
         setShowSubmission(false);
-        if (position <= 2 && position !== -1) {
+        
+        // Only show notification if position has changed and is within notification range
+        if (position <= 2 && position !== prevPositionRef.current) {
           if ('Notification' in window && Notification.permission === 'granted') {
             new Notification(
               position === 1 
@@ -104,6 +109,9 @@ export function PartyView() {
             );
           }
         }
+        
+        // Update the previous position
+        prevPositionRef.current = position;
       }
     }
   }, [queue, name, getUserQueuePosition]);
@@ -210,6 +218,33 @@ export function PartyView() {
     }
   };
 
+  // Add leaveParty function
+  const leaveParty = async () => {
+    try {
+      // If user submitted a song, delete it
+      if (submittedSongId) {
+        await supabase
+          .from('songs')
+          .delete()
+          .eq('id', submittedSongId);
+      }
+      
+      // Clear local storage
+      localStorage.removeItem('partyId');
+      localStorage.removeItem('submittedSongId');
+      
+      // Reset state
+      setPartyId('');
+      setSubmittedSongId(null);
+      setJoined(false);
+      
+      // Navigate to main page
+      navigate('/');
+    } catch (error) {
+      setError('Error leaving party. Please try again.');
+    }
+  };
+
   const renderQueueStatus = () => {
     const position = submittedSongId 
       ? queue.findIndex(song => song.id === submittedSongId)
@@ -311,6 +346,18 @@ export function PartyView() {
           </div>
         ) : (
           <div className="space-y-6">
+            {/* Leave Party Button */}
+            <div className="flex justify-end">
+              <button
+                onClick={leaveParty}
+                className="flex items-center text-red-600 hover:text-red-800 transition-colors"
+                aria-label="Leave party"
+              >
+                <LogOut className="w-5 h-5 mr-1" />
+                Leave Party
+              </button>
+            </div>
+            
             {renderQueueStatus()}
             {showSubmission && (
               <>
