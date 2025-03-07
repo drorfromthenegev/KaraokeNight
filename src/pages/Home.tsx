@@ -73,12 +73,22 @@ export function Home() {
           )}
 
           <div className="space-y-4">
-            <button
-              onClick={createParty}
-              className="w-full py-3 px-4 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
-            >
-              Host a Party
-            </button>
+            {/* Host and Join buttons on the same row */}
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={createParty}
+                className="py-3 px-4 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
+              >
+                Host a Party
+              </button>
+              
+              <button
+                onClick={() => navigate('/party')}
+                className="py-3 px-4 bg-gray-100 text-gray-900 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+              >
+                Join Party
+              </button>
+            </div>
             
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -98,20 +108,13 @@ export function Home() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
               
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  onClick={() => navigate('/party')}
-                  className="py-3 px-4 bg-gray-100 text-gray-900 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-                >
-                  Join Party
-                </button>
-                <button
-                  onClick={joinPartyAsDisplay}
-                  className="py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                >
-                  Display View
-                </button>
-              </div>
+              {/* Display View button on its own row */}
+              <button
+                onClick={joinPartyAsDisplay}
+                className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+              >
+                Display View
+              </button>
             </div>
           </div>
         </div>
