@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, AlertCircle, CheckCircle2, Mic2, LogOut } from 'lucide-react';
+import { Music, AlertCircle, CheckCircle2, Mic2, LogOut, ChevronDown, ChevronUp } from 'lucide-react';
 import { usePartyStore } from '../store/partyStore';
 import { supabase } from '../lib/supabase';
 
@@ -15,6 +15,15 @@ export function PartyView() {
   const [showSubmission, setShowSubmission] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [submittedSongId, setSubmittedSongId] = useState<string | null>(null);
+  const [showExplanation, setShowExplanation] = useState(false);
+  // New state variables for manual title input
+  const [showManualTitleInput, setShowManualTitleInput] = useState(false);
+  const [manualTitle, setManualTitle] = useState('');
+  // Toast notification state
+  const [toast, setToast] = useState('');
+  const [toastType, setToastType] = useState<'error' | 'warning' | 'success'>('error');
+  const [showToast, setShowToast] = useState(false);
+  
   const { 
     partyId,
     setPartyId, 
@@ -28,6 +37,24 @@ export function PartyView() {
   // Add ref to store previous queue position
   const prevPositionRef = useRef<number>(-1);
 
+  // Toast timer ref
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Show toast notification function
+  const showToastMessage = (message: string, type: 'error' | 'warning' | 'success' = 'error') => {
+    setToast(message);
+    setToastType(type);
+    setShowToast(true);
+    
+    // Clear any existing timer
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    
+    // Set new timer to hide toast
+    toastTimerRef.current = setTimeout(() => {
+      setShowToast(false);
+    }, 5000);
+  };
+
   // Restore persisted values on mount
   useEffect(() => {
     const storedPartyId = localStorage.getItem('partyId');
@@ -40,6 +67,13 @@ export function PartyView() {
       setSubmittedSongId(storedSubmittedSongId);
     }
   }, []); // Run once
+
+  // Cleanup toast timer on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   // Check if party exists; if not, clear persisted data and return to join view
   useEffect(() => {
@@ -169,29 +203,48 @@ export function PartyView() {
         setError('Party ID is missing');
         return;
       }
+
       const videoId = extractVideoId(youtubeUrl);
       if (!videoId) {
         setError('Invalid YouTube URL');
         return;
       }
+      
       const title = await getVideoTitle(videoId);
+      
+      // Check if video is unembeddable and no manual title has been provided
+      if (title === 'Unknown Title' && !manualTitle) {
+        setShowManualTitleInput(true);
+        showToastMessage(
+          "This video might not be embeddable. Please provide a title or try another video link.", 
+          "warning"
+        );
+        return;
+      }
+      
+      // Use manual title if provided, otherwise use the fetched title
+      const finalTitle = manualTitle || title;
+      
       const { data, error } = await supabase
         .from('songs')
         .insert([{
           party_id: partyId,
-          title,
+          title: finalTitle,
           youtube_url: videoId,
           submitted_by: name,
           order: 0
         }])
         .select()
         .single();
+        
       if (error) throw error;
       if (data) {
         addSong(data);
         setSubmittedSongId(data.id);
         localStorage.setItem('submittedSongId', data.id);
         setYoutubeUrl('');
+        setManualTitle('');
+        setShowManualTitleInput(false);
         setError('');
         setSuccess('Song added successfully! Get ready to shine! ✨');
         setTimeout(() => setSuccess(''), 3000);
@@ -310,8 +363,33 @@ export function PartyView() {
     );
   };
 
+  // Toast component
+  const ToastNotification = () => {
+    if (!showToast) return null;
+    
+    const bgColor = {
+      error: 'bg-red-50 border-red-200 text-red-700',
+      warning: 'bg-amber-50 border-amber-200 text-amber-700',
+      success: 'bg-green-50 border-green-200 text-green-700'
+    }[toastType];
+    
+    return (
+      <div className={`fixed top-4 right-4 p-4 rounded-lg border ${bgColor} shadow-lg max-w-xs animate-fadeIn`}>
+        <div className="flex items-center">
+          {toastType === 'error' && <AlertCircle className="w-5 h-5 mr-2" />}
+          {toastType === 'warning' && <AlertCircle className="w-5 h-5 mr-2" />}
+          {toastType === 'success' && <CheckCircle2 className="w-5 h-5 mr-2" />}
+          <p>{toast}</p>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-500 flex items-center justify-center p-4">
+      {/* Toast notification */}
+      <ToastNotification />
+      
       <div className="max-w-md w-full bg-white rounded-xl shadow-2xl p-8">
         {!joined ? (
           <div className="space-y-6">
@@ -400,6 +478,45 @@ export function PartyView() {
                       placeholder="Paste YouTube URL"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     />
+                    
+                    {/* Manual title input - only shown when needed */}
+                    {showManualTitleInput && (
+                      <div className="mt-4">
+                        <label htmlFor="manualTitle" className="block text-sm font-medium text-gray-700 mb-1">
+                          Song Title (required)
+                        </label>
+                        <input
+                          type="text"
+                          id="manualTitle"
+                          value={manualTitle}
+                          onChange={(e) => setManualTitle(e.target.value)}
+                          placeholder="Enter song title"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                        <p className="text-sm text-amber-600 mt-1">
+                          The video might not be embeddable. Please provide a title.
+                        </p>
+                      </div>
+                    )}
+                    
+                    <div className="mt-2">
+                      <div className="text-amber-600 text-sm">
+                        <p>⚠️ Please avoid videos from Karafun or Sing King channels if possible.</p>
+                        <button 
+                          onClick={() => setShowExplanation(!showExplanation)}
+                          className="text-blue-600 hover:text-blue-800 text-xs flex items-center mt-1 focus:outline-none"
+                        >
+                          {showExplanation ? 'Hide explanation' : 'Why?'} 
+                          {showExplanation ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
+                        </button>
+                      </div>
+                      {showExplanation && (
+                        <div className="bg-amber-50 p-3 rounded-md mt-2 text-xs text-gray-700">
+                          <p>Videos from these channels block embedding on external sites, making them difficult for our karaoke MC to play. Almost every song they offer has alternative karaoke versions on YouTube that will work better with our system.</p>
+                          <p className="mt-2">You can still use these videos if you can't find alternatives, but it might cause a slight delay when your turn comes up. Your MC will appreciate the consideration!</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <button
                     onClick={submitSong}
